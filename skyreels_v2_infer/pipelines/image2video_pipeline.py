@@ -83,6 +83,7 @@ class Image2VideoPipeline:
         shift: float = 5.0,
         generator: Optional[torch.Generator] = None,
     ):
+        cfg_distrill = guidance_scale <= 1.0
         F = num_frames
 
         latent_height = height // 8 // 2 * 2
@@ -144,8 +145,11 @@ class Image2VideoPipeline:
                 latent_model_input = torch.stack([latent]).to(self.device)
                 timestep = torch.stack([t]).to(self.device)
                 noise_pred_cond = self.transformer(latent_model_input, t=timestep, **arg_c)[0].to(self.device)
-                noise_pred_uncond = self.transformer(latent_model_input, t=timestep, **arg_null)[0].to(self.device)
-                noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
+                if not cfg_distrill:
+                    noise_pred_uncond = self.transformer(latent_model_input, t=timestep, **arg_null)[0].to(self.device)
+                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
+                else:
+                    noise_pred = noise_pred_cond
 
                 temp_x0 = self.scheduler.step(
                     noise_pred.unsqueeze(0), t, latent.unsqueeze(0), return_dict=False, generator=generator
