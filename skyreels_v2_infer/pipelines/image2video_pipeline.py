@@ -16,6 +16,9 @@ from ..modules import get_transformer
 from ..modules import get_vae
 from ..scheduler.fm_solvers_unipc import FlowUniPCMultistepScheduler
 
+from functools import partial
+from ..distributed.fsdp import shard_model
+
 
 def resizecrop(image: Image.Image, th, tw):
     w, h = image.size
@@ -41,6 +44,7 @@ class Image2VideoPipeline:
     ):
         load_device = "cpu" if offload else device
         self.transformer = get_transformer(dit_path, load_device, weight_dtype)
+
         vae_model_path = os.path.join(model_path, "Wan2.1_VAE.pth")
         self.vae = get_vae(vae_model_path, device, weight_dtype=torch.float32)
         self.text_encoder = get_text_encoder(model_path, load_device, weight_dtype)
@@ -62,6 +66,8 @@ class Image2VideoPipeline:
         self.scheduler = FlowUniPCMultistepScheduler()
         self.vae_stride = (4, 8, 8)
         self.patch_size = (1, 2, 2)
+        shard_fn = partial(shard_model, device_id=device)
+        self.transformer = shard_fn(self.transformer)
 
     @torch.no_grad()
     def __call__(
